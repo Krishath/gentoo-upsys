@@ -7,7 +7,7 @@ emerge eix -av
 ```
 Usage:
 ```
-	gentoo-upsys [options]"
+	gentoo-upsys [options]
 	---
 	Options:
 	-n | excludes sync of the gentoo tree
