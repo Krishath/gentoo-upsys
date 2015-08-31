@@ -3,7 +3,7 @@ Gentoo System Upgrade Script
 	
 Before using gentoo-upsys you need to:
 ```
-emerge eix -av
+emerge eix gentoolkit -av
 ```
 Usage:
 ```
