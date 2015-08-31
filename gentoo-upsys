@@ -1,0 +1,67 @@
+#!/bin/bash
+
+function printUsage {
+	echo "usage: $0 -[c|e] [options]"
+		echo "----"
+		echo "   -n | exclude sync of the gentoo tree"
+		echo "----"
+		echo "Options:"
+		echo "   -e [ebuild] | excludes the specified ebuild"
+		echo "   -q | quiet"
+		echo "   -v | verbose"
+}
+
+function printAndExit {
+	echo ""
+	echo ""
+	echo ""
+	exit 1
+}
+
+if [ `whoami` != "root" ]
+then
+	echo "Please run this script as root."
+	exit 1
+fi
+
+trap printAndExit SIGINT SIGTERM SIGKILL SIGQUIT
+
+args=()
+excludes=()
+sync=true
+while getopts ":e:qvnh" opt
+do
+	case $opt in
+		e)
+			if [[ "$OPTARG" =~ ^[a-zA-Z]+-[a-zA-Z]+/[a-zA-Z]+$ ]]
+			then
+				excludes+=('--exclude')
+				excludes+=($OPTARG)
+			fi
+			;;
+		v)
+			args+=('-v')
+			;;
+		q)
+			args+=('--quiet')
+			;;
+		n)
+			sync=false
+			;;	
+		h)
+			printUsage
+			;;
+		\?)
+			echo "Invalid option: -${OPTARG}"
+			printUsage
+			exit 1
+			;;
+	esac
+done
+
+$sync && eix-sync
+emerge -DuNat --with-bdeps=y ${args[@]} ${excludes[@]} @world || printAndExit
+emerge @preserved-rebuild ${args[@]} || printAndExit
+revdep-rebuild || printAndExit
+emerge @module-rebuild ${args[@]} || printAndExit
+emerge --depclean ${args[@]} || printAndExit
