@@ -1,12 +1,26 @@
 #!/bin/bash
 
+# importing $CFLAGS, $CXXFLAGS and $MAKEOPTS flags
+
+source /etc/portage/make.conf
+
+# importing user preferences
+
+source `dirname $0`/gentoo-upsys.conf
+
+# SCRIPT VARIABLES, DO NOT EDIT
+UPSYS_ARGS=()
+UPSYS_EXCLUDES=()
+UPSYS_KERNELUPDATE=false
+UPSYS_SYNC=true
+
 function printUsage {
 	echo "usage: $0 -[c|e] [options]"
 		echo "----"
-		echo "   -n | exclude sync of the gentoo tree"
+		echo "   -n | exclude UPSYS_SYNC of the gentoo tree"
 		echo "----"
 		echo "Options:"
-		echo "   -e [ebuild] | excludes the specified ebuild"
+		echo "   -e [ebuild] | UPSYS_EXCLUDES the specified ebuild"
 		echo "   -q | quiet"
 		echo "   -v | verbose"
 }
@@ -18,6 +32,29 @@ function printAndExit {
 	exit 1
 }
 
+function buildKernel {	
+	if [ ! -f "$UPSYS_LATEST_KERNEL_SRC_DIR/.config" ]
+	then
+		cp /usr/src/linux-`uname -r`/.config $UPSYS_LATEST_KERNEL_SRC_DIR
+	fi
+	
+	cd $UPSYS_LATEST_KERNEL_SRC_DIR
+	make $MAKEOPTS
+	make modules $MAKEOPTS
+	make modules_install
+	make install $MAKEOPTS
+	
+	if [ $UPSYS_USE_GENKERNEL_INITRAMFS ]
+	then
+		genkernel initramfs
+	fi
+
+	if [ $UPSYS_USE_GRUB ]
+	then
+		grub2-mkconfig -o $UPSYS_GRUB_CFG
+	fi
+}
+
 if [ `whoami` != "root" ]
 then
 	echo "Please run this script as root."
@@ -26,27 +63,24 @@ fi
 
 trap printAndExit SIGINT SIGTERM SIGKILL SIGQUIT
 
-args=()
-excludes=()
-sync=true
 while getopts ":e:qvnh" opt
 do
 	case $opt in
 		e)
 			if [[ "$OPTARG" =~ ^[a-zA-Z]+-[a-zA-Z]+/[a-zA-Z]+$ ]]
 			then
-				excludes+=('--exclude')
-				excludes+=($OPTARG)
+				UPSYS_EXCLUDES+=('--exclude')
+				UPSYS_EXCLUDES+=($OPTARG)
 			fi
 			;;
 		v)
-			args+=('-v')
+			UPSYS_ARGS+=('-v')
 			;;
 		q)
-			args+=('--quiet')
+			UPSYS_ARGS+=('--quiet')
 			;;
 		n)
-			sync=false
+			UPSYS_SYNC=false
 			;;	
 		h)
 			printUsage
@@ -59,9 +93,40 @@ do
 	esac
 done
 
-$sync && eix-sync
-emerge -DuNat --with-bdeps=y ${args[@]} ${excludes[@]} @world || printAndExit
-emerge @preserved-rebuild ${args[@]} || printAndExit
+$UPSYS_SYNC && ($UPSYS_USE_EIX && eix-sync || emerge --sync) 
+
+# checking if there are kernel sources to compile
+if [ $UPSYS_KERNEL_COMPILE ]
+then
+	UPSYS_KERNEL_GENLOP_CHECK=`genlop --date $UPSYS_KERNEL_GENLOP_LAST_CHECK '*-sources' | grep Error`
+
+	if [ -z "$UPSYS_KERNEL_GENLOP_CHECK" ]
+	then
+		echo "yop"
+		# getting full kernel version (e.g 4.2.0-r1)
+		UPSYS_NEW_KERNEL=`genlop --date $UPSYS_KERNEL_GENLOP_LAST_CHECK '*-sources' | tail -n2 |  cut -d "/" -f 2 | cut -d "-" -f 3- | cut -d $'\n' -f 1`
+		# extracting revision (e.g -r1)
+		UPSYS_NEW_KERNEL_REVISION=-`echo $UPSYS_NEW_KERNEL | cut -d "-" -f 2- | cut -d $'\n' -f 1`
+		# if there was a revision, remove it (e.g 4.2.0)
+		UPSYS_NEW_KERNEL=`echo $UPSYS_NEW_KERNEL | cut -d "-" -f 1`
+		# checking if the new sources have already been compiled
+		if [ ! -f "$UPSYS_BOOTDIR/vmlinuz-$UPSYS_NEW_KERNEL$UPSYS_KERNEL_SUFFIX$UPSYS_NEW_KERNEL_REVISION" ]
+		then
+			UPSYS_KERNELUPDATE=true
+		fi
+	fi
+fi
+
+
+emerge -DuNat --with-bdeps=y ${UPSYS_ARGS[@]} ${UPSYS_EXCLUDES[@]} @world || printAndExit
+emerge @preserved-rebuild ${UPSYS_ARGS[@]} || printAndExit
 revdep-rebuild || printAndExit
-emerge @module-rebuild ${args[@]} || printAndExit
-emerge --depclean ${args[@]} || printAndExit
+
+if [ $UPSYS_KERNELUPDATE ]
+then
+	buildKernel
+	emerge @module-rebuild ${UPSYS_ARGS[@]} || printAndExit
+fi
+
+emerge --depclean ${UPSYS_ARGS[@]} || printAndExit
+echo "gentoo-upsys: done."
