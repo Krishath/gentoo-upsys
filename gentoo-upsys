@@ -15,14 +15,13 @@ UPSYS_KERNELUPDATE=false
 UPSYS_SYNC=true
 
 function printUsage {
-	echo "usage: $0 -[c|e] [options]"
-		echo "----"
-		echo "   -n | exclude UPSYS_SYNC of the gentoo tree"
-		echo "----"
-		echo "Options:"
-		echo "   -e [ebuild] | UPSYS_EXCLUDES the specified ebuild"
-		echo "   -q | quiet"
-		echo "   -v | verbose"
+	echo "usage: $0 [options]"
+	echo "---"
+	echo "Options:"
+	echo "-n | excludes sync of the gentoo tree"
+	echo "-e [ebuild] | excludes the specified ebuild"
+	echo "-q | compiles quietly"
+	echo "-v | verbose listings (can be used with -q)"
 }
 
 function printAndExit {
@@ -122,6 +121,7 @@ emerge -DuNat --with-bdeps=y ${UPSYS_ARGS[@]} ${UPSYS_EXCLUDES[@]} @world || pri
 emerge @preserved-rebuild ${UPSYS_ARGS[@]} || printAndExit
 revdep-rebuild || printAndExit
 
+# this check is needed since some @module-rebuild packages require a compiled kernel to build correctly
 if [ $UPSYS_KERNELUPDATE ]
 then
 	buildKernel
