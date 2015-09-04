@@ -101,7 +101,6 @@ then
 
 	if [ -z "$UPSYS_KERNEL_GENLOP_CHECK" ]
 	then
-		echo "yop"
 		# getting full kernel version (e.g 4.2.0-r1)
 		UPSYS_NEW_KERNEL=`genlop --date $UPSYS_KERNEL_GENLOP_LAST_CHECK '*-sources' | tail -n2 |  cut -d "/" -f 2 | cut -d "-" -f 3- | cut -d $'\n' -f 1`
 		# extracting revision (e.g -r1)
@@ -117,7 +116,7 @@ then
 fi
 
 
-emerge -DuNat --with-bdeps=y ${UPSYS_ARGS[@]} ${UPSYS_EXCLUDES[@]} @world || printAndExit
+emerge $UPSYS_EMERGE_DEFAULT_OPTS ${UPSYS_ARGS[@]} ${UPSYS_EXCLUDES[@]} @world || printAndExit
 emerge @preserved-rebuild ${UPSYS_ARGS[@]} || printAndExit
 revdep-rebuild || printAndExit
 
